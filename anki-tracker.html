@@ -509,7 +509,10 @@
                     .select('*')
                     .order('date', { ascending: true });
 
-                if (error) throw error;
+                if (error) {
+                    console.error('Supabase error:', JSON.stringify(error));
+                    throw new Error(error.message || JSON.stringify(error));
+                }
 
                 dataCache = {};
                 data.forEach(record => {
@@ -527,8 +530,8 @@
                 });
                 return dataCache;
             } catch (e) {
-                console.error('加载数据失败:', e);
-                showToast('加载数据失败');
+                console.error('加载数据失败:', e.message || e);
+                showToast('加载数据失败: ' + (e.message || '未知错误'));
                 return {};
             }
         }
@@ -549,17 +552,21 @@
                     filtered: parsed.filtered
                 };
 
-                const { error } = await supabaseClient
+                const { data, error } = await supabaseClient
                     .from('anki_records')
-                    .upsert(record, { onConflict: 'date' });
+                    .upsert(record, { onConflict: 'date' })
+                    .select();
 
-                if (error) throw error;
+                if (error) {
+                    console.error('Supabase save error:', JSON.stringify(error));
+                    throw new Error(error.message || JSON.stringify(error));
+                }
 
                 dataCache[date] = parsed;
                 return true;
             } catch (e) {
-                console.error('保存失败:', e);
-                showToast('保存失败: ' + e.message);
+                console.error('保存失败:', e.message || e);
+                showToast('保存失败: ' + (e.message || '未知错误'));
                 return false;
             }
         }
@@ -574,7 +581,10 @@
                     .delete()
                     .eq('date', date);
 
-                if (error) throw error;
+                if (error) {
+                    console.error('Supabase delete error:', JSON.stringify(error));
+                    throw new Error(error.message || JSON.stringify(error));
+                }
 
                 delete dataCache[date];
                 updateStats();
@@ -582,8 +592,8 @@
                 updateChart();
                 showToast('已删除');
             } catch (e) {
-                console.error('删除失败:', e);
-                showToast('删除失败: ' + e.message);
+                console.error('删除失败:', e.message || e);
+                showToast('删除失败: ' + (e.message || '未知错误'));
             }
         }
 
