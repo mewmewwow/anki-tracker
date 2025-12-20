@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anki 学习追踪</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f8f9fa;
+            min-height: 100vh;
+            padding: 24px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .card h2 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #555;
+        }
+
+        textarea {
+            width: 100%;
+            height: 120px;
+            padding: 14px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 1.6;
+            resize: vertical;
+            transition: border-color 0.2s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+
+        textarea::placeholder {
+            color: #adb5bd;
+        }
+
+        .actions {
+            margin-top: 14px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #4a9eff;
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: #3a8eef;
+        }
+
+        .btn-primary:disabled {
+            background: #b8d4f8;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #e9ecef;
+            color: #495057;
+        }
+
+        .btn-secondary:hover {
+            background: #dee2e6;
+        }
+
+        .btn-danger {
+            background: #ff6b6b;
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            background: #ee5a5a;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .date-display {
+            margin-left: auto;
+            font-size: 14px;
+            color: #868e96;
+        }
+
+        .preview {
+            display: none;
+            margin-top: 16px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .preview.show {
+            display: block;
+        }
+
+        .preview-title {
+            font-size: 13px;
+            color: #868e96;
+            margin-bottom: 12px;
+        }
+
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+        }
+
+        .preview-item {
+            background: #fff;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 3px solid #4a9eff;
+        }
+
+        .preview-item .label {
+            font-size: 12px;
+            color: #868e96;
+            margin-bottom: 4px;
+        }
+
+        .preview-item .value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .preview-item .value.warning {
+            color: #f59f00;
+        }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: #fff;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .stat-card .number {
+            font-size: 28px;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .stat-card .label {
+            font-size: 13px;
+            color: #868e96;
+            margin-top: 4px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 280px;
+            margin-bottom: 20px;
+        }
+
+        .chart-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .chart-tab {
+            padding: 8px 16px;
+            background: #e9ecef;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #495057;
+            transition: all 0.2s;
+        }
+
+        .chart-tab:hover {
+            background: #dee2e6;
+        }
+
+        .chart-tab.active {
+            background: #4a9eff;
+            color: #fff;
+        }
+
+        .history-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .history-item {
+            display: flex;
+            align-items: center;
+            padding: 14px 0;
+            border-bottom: 1px solid #f1f3f4;
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .history-date {
+            font-weight: 600;
+            min-width: 100px;
+        }
+
+        .history-stats {
+            flex: 1;
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .history-stats span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .history-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #adb5bd;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #333;
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        .breakdown-bar {
+            display: flex;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .breakdown-bar .segment {
+            transition: width 0.3s;
+        }
+
+        .breakdown-legend {
+            display: flex;
+            gap: 16px;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .breakdown-legend span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .breakdown-legend .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .export-section {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            gap: 10px;
+        }
+
+        @media (max-width: 640px) {
+            .stats-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .history-stats {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Anki 学习追踪</h1>
+
+        <!-- 输入区域 -->
+        <div class="card">
+            <h2>粘贴今日数据</h2>
+            <textarea id="inputText" placeholder="粘贴 Anki 统计文本，例如：&#10;今天在 83.38 分内学习了 328 张卡片（平均每张卡片 15.25 秒）&#10;「重来」计数： 121 (36.89%)&#10;学习：182；复习：84；重新学习：62；已筛选：0"></textarea>
+            <div class="actions">
+                <button class="btn btn-primary" id="saveBtn" disabled>保存到今天</button>
+                <button class="btn btn-secondary" id="clearBtn">清空</button>
+                <span class="date-display" id="todayDate"></span>
+            </div>
+            <div class="preview" id="preview">
+                <div class="preview-title">📋 解析预览</div>
+                <div class="preview-grid" id="previewGrid"></div>
+            </div>
+        </div>
+
+        <!-- 统计概览 -->
+        <div class="stats-row" id="statsRow">
+            <div class="stat-card">
+                <div class="number" id="totalDays">0</div>
+                <div class="label">累计天数</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="totalCards">0</div>
+                <div class="label">累计卡片</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="totalTime">0</div>
+                <div class="label">累计时长(分)</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="avgRetry">0%</div>
+                <div class="label">平均重来率</div>
+            </div>
+        </div>
+
+        <!-- 图表区域 -->
+        <div class="card">
+            <h2>📈 趋势图表</h2>
+            <div class="chart-tabs">
+                <button class="chart-tab active" data-chart="cards">卡片数量</button>
+                <button class="chart-tab" data-chart="duration">学习时长</button>
+                <button class="chart-tab" data-chart="retry">重来比例</button>
+                <button class="chart-tab" data-chart="breakdown">类型分布</button>
+            </div>
+            <div class="chart-container">
+                <canvas id="mainChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 历史记录 -->
+        <div class="card">
+            <h2>📋 历史记录</h2>
+            <div class="history-list" id="historyList">
+                <div class="empty-state">暂无数据，粘贴你的第一条 Anki 统计吧</div>
+            </div>
+            <div class="export-section">
+                <button class="btn btn-secondary btn-small" id="exportBtn">导出 JSON</button>
+                <button class="btn btn-secondary btn-small" id="importBtn">导入数据</button>
+                <input type="file" id="importFile" accept=".json" style="display:none">
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // 数据存储
+        const STORAGE_KEY = 'anki_tracker_data';
+
+        // 获取今天日期
+        function getTodayDate() {
+            return new Date().toISOString().split('T')[0];
+        }
+
+        // 格式化日期显示
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            const month = date.getMonth() + 1;
+            const day = date.getDate();
+            const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+            return `${month}月${day}日 ${weekdays[date.getDay()]}`;
+        }
+
+        // 解析 Anki 统计文本
+        function parseAnkiText(text) {
+            try {
+                // 清理文本中的特殊字符
+                const cleanText = text.replace(/[\u2068\u2069]/g, '');
+                
+                // 解析时长和卡片数
+                const durationMatch = cleanText.match(/在\s*([\d.]+)\s*分/);
+                const cardsMatch = cleanText.match(/学习了\s*([\d]+)\s*张/);
+                const avgMatch = cleanText.match(/平均每张卡片\s*([\d.]+)\s*秒/);
+                
+                // 解析重来计数
+                const retryMatch = cleanText.match(/「重来」计数[：:]\s*([\d]+)\s*\(([\d.]+)%\)/);
+                
+                // 解析学习类型
+                const learnMatch = cleanText.match(/学习[：:]\s*([\d]+)/);
+                const reviewMatch = cleanText.match(/复习[：:]\s*([\d]+)/);
+                const relearnMatch = cleanText.match(/重新学习[：:]\s*([\d]+)/);
+                const filteredMatch = cleanText.match(/已筛选[：:]\s*([\d]+)/);
+
+                if (!durationMatch || !cardsMatch) {
+                    return null;
+                }
+
+                return {
+                    duration: parseFloat(durationMatch[1]),
+                    cards: parseInt(cardsMatch[1]),
+                    avgSeconds: avgMatch ? parseFloat(avgMatch[1]) : 0,
+                    retryCount: retryMatch ? parseInt(retryMatch[1]) : 0,
+                    retryPercent: retryMatch ? parseFloat(retryMatch[2]) : 0,
+                    learn: learnMatch ? parseInt(learnMatch[1]) : 0,
+                    review: reviewMatch ? parseInt(reviewMatch[1]) : 0,
+                    relearn: relearnMatch ? parseInt(relearnMatch[1]) : 0,
+                    filtered: filteredMatch ? parseInt(filteredMatch[1]) : 0
+                };
+            } catch (e) {
+                console.error('解析错误:', e);
+                return null;
+            }
+        }
+
+        // 加载数据
+        function loadData() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            return data ? JSON.parse(data) : {};
+        }
+
+        // 保存数据
+        function saveData(data) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        }
+
+        // 显示 Toast
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2500);
+        }
+
+        // 更新预览
+        function updatePreview(parsed) {
+            const preview = document.getElementById('preview');
+            const grid = document.getElementById('previewGrid');
+            const saveBtn = document.getElementById('saveBtn');
+
+            if (!parsed) {
+                preview.classList.remove('show');
+                saveBtn.disabled = true;
+                return;
+            }
+
+            preview.classList.add('show');
+            saveBtn.disabled = false;
+
+            grid.innerHTML = `
+                <div class="preview-item">
+                    <div class="label">学习时长</div>
+                    <div class="value">${parsed.duration} 分</div>
+                </div>
+                <div class="preview-item">
+                    <div class="label">卡片总数</div>
+                    <div class="value">${parsed.cards} 张</div>
+                </div>
+                <div class="preview-item">
+                    <div class="label">平均速度</div>
+                    <div class="value">${parsed.avgSeconds} 秒/张</div>
+                </div>
+                <div class="preview-item">
+                    <div class="label">重来比例</div>
+                    <div class="value ${parsed.retryPercent > 30 ? 'warning' : ''}">${parsed.retryPercent}%</div>
+                </div>
+                <div class="preview-item">
+                    <div class="label">学习</div>
+                    <div class="value">${parsed.learn}</div>
+                </div>
+                <div class="preview-item">
+                    <div class="label">复习</div>
+                    <div class="value">${parsed.review}</div>
+                </div>
+                <div class="preview-item">
+                    <div class="label">重新学习</div>
+                    <div class="value">${parsed.relearn}</div>
+                </div>
+                <div class="preview-item">
+                    <div class="label">已筛选</div>
+                    <div class="value">${parsed.filtered}</div>
+                </div>
+            `;
+        }
+
+        // 更新统计概览
+        function updateStats() {
+            const data = loadData();
+            const entries = Object.values(data);
+            
+            const totalDays = entries.length;
+            const totalCards = entries.reduce((sum, e) => sum + e.cards, 0);
+            const totalTime = entries.reduce((sum, e) => sum + e.duration, 0);
+            const avgRetry = entries.length > 0 
+                ? (entries.reduce((sum, e) => sum + e.retryPercent, 0) / entries.length).toFixed(1)
+                : 0;
+
+            document.getElementById('totalDays').textContent = totalDays;
+            document.getElementById('totalCards').textContent = totalCards;
+            document.getElementById('totalTime').textContent = totalTime.toFixed(0);
+            document.getElementById('avgRetry').textContent = avgRetry + '%';
+        }
+
+        // 更新历史记录
+        function updateHistory() {
+            const data = loadData();
+            const list = document.getElementById('historyList');
+            const dates = Object.keys(data).sort().reverse();
+
+            if (dates.length === 0) {
+                list.innerHTML = '<div class="empty-state">暂无数据，粘贴你的第一条 Anki 统计吧</div>';
+                return;
+            }
+
+            list.innerHTML = dates.map(date => {
+                const d = data[date];
+                return `
+                    <div class="history-item">
+                        <div class="history-date">${formatDate(date)}</div>
+                        <div class="history-stats">
+                            <span>🃏 ${d.cards} 张</span>
+                            <span>⏱️ ${d.duration} 分</span>
+                            <span>🔄 ${d.retryPercent}%</span>
+                        </div>
+                        <div class="history-actions">
+                            <button class="btn btn-danger btn-small" onclick="deleteRecord('${date}')">删除</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 删除记录
+        function deleteRecord(date) {
+            if (!confirm(`确定删除 ${formatDate(date)} 的记录吗？`)) return;
+            
+            const data = loadData();
+            delete data[date];
+            saveData(data);
+            
+            updateStats();
+            updateHistory();
+            updateChart();
+            showToast('已删除');
+        }
+
+        // 图表相关
+        let mainChart = null;
+        let currentChartType = 'cards';
+
+        function updateChart() {
+            const data = loadData();
+            const dates = Object.keys(data).sort().slice(-30); // 最近30天
+            
+            if (dates.length === 0) {
+                if (mainChart) {
+                    mainChart.destroy();
+                    mainChart = null;
+                }
+                return;
+            }
+
+            const labels = dates.map(d => {
+                const date = new Date(d);
+                return `${date.getMonth() + 1}/${date.getDate()}`;
+            });
+
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            
+            if (mainChart) {
+                mainChart.destroy();
+            }
+
+            let chartConfig;
+
+            if (currentChartType === 'cards') {
+                chartConfig = {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: '卡片数量',
+                            data: dates.map(d => data[d].cards),
+                            borderColor: '#4a9eff',
+                            backgroundColor: 'rgba(74, 158, 255, 0.1)',
+                            fill: true,
+                            tension: 0.3
+                        }]
+                    }
+                };
+            } else if (currentChartType === 'duration') {
+                chartConfig = {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: '学习时长(分)',
+                            data: dates.map(d => data[d].duration),
+                            borderColor: '#51cf66',
+                            backgroundColor: 'rgba(81, 207, 102, 0.1)',
+                            fill: true,
+                            tension: 0.3
+                        }]
+                    }
+                };
+            } else if (currentChartType === 'retry') {
+                chartConfig = {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: '重来比例(%)',
+                            data: dates.map(d => data[d].retryPercent),
+                            borderColor: '#ff6b6b',
+                            backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                            fill: true,
+                            tension: 0.3
+                        }]
+                    }
+                };
+            } else if (currentChartType === 'breakdown') {
+                chartConfig = {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [
+                            {
+                                label: '学习',
+                                data: dates.map(d => data[d].learn),
+                                backgroundColor: '#4a9eff'
+                            },
+                            {
+                                label: '复习',
+                                data: dates.map(d => data[d].review),
+                                backgroundColor: '#51cf66'
+                            },
+                            {
+                                label: '重新学习',
+                                data: dates.map(d => data[d].relearn),
+                                backgroundColor: '#fcc419'
+                            }
+                        ]
+                    },
+                    options: {
+                        scales: {
+                            x: { stacked: true },
+                            y: { stacked: true }
+                        }
+                    }
+                };
+            }
+
+            chartConfig.options = {
+                ...chartConfig.options,
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: currentChartType === 'breakdown'
+                    }
+                }
+            };
+
+            mainChart = new Chart(ctx, chartConfig);
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            // 显示今天日期
+            document.getElementById('todayDate').textContent = formatDate(getTodayDate());
+
+            // 监听输入
+            const textarea = document.getElementById('inputText');
+            textarea.addEventListener('input', () => {
+                const parsed = parseAnkiText(textarea.value);
+                updatePreview(parsed);
+            });
+
+            // 保存按钮
+            document.getElementById('saveBtn').addEventListener('click', () => {
+                const parsed = parseAnkiText(textarea.value);
+                if (!parsed) return;
+
+                const data = loadData();
+                const today = getTodayDate();
+                
+                if (data[today]) {
+                    if (!confirm('今天已有记录，是否覆盖？')) return;
+                }
+
+                data[today] = parsed;
+                saveData(data);
+
+                textarea.value = '';
+                updatePreview(null);
+                updateStats();
+                updateHistory();
+                updateChart();
+                showToast('✓ 已保存');
+            });
+
+            // 清空按钮
+            document.getElementById('clearBtn').addEventListener('click', () => {
+                textarea.value = '';
+                updatePreview(null);
+            });
+
+            // 图表切换
+            document.querySelectorAll('.chart-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    currentChartType = tab.dataset.chart;
+                    updateChart();
+                });
+            });
+
+            // 导出
+            document.getElementById('exportBtn').addEventListener('click', () => {
+                const data = loadData();
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `anki-tracker-${getTodayDate()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('已导出');
+            });
+
+            // 导入
+            document.getElementById('importBtn').addEventListener('click', () => {
+                document.getElementById('importFile').click();
+            });
+
+            document.getElementById('importFile').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const importedData = JSON.parse(event.target.result);
+                        const currentData = loadData();
+                        const merged = { ...currentData, ...importedData };
+                        saveData(merged);
+                        updateStats();
+                        updateHistory();
+                        updateChart();
+                        showToast(`已导入 ${Object.keys(importedData).length} 条记录`);
+                    } catch (err) {
+                        showToast('导入失败：无效的 JSON 文件');
+                    }
+                };
+                reader.readAsText(file);
+                e.target.value = '';
+            });
+
+            // 初始加载
+            updateStats();
+            updateHistory();
+            updateChart();
+        });
+    </script>
+</body>
+</html>
