@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Anki 学习追踪</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -443,8 +444,13 @@
     <div class="toast" id="toast"></div>
 
     <script>
-        // 数据存储
-        const STORAGE_KEY = 'anki_tracker_data';
+        // Supabase 配置
+        const SUPABASE_URL = 'https://xoiigexoteorphfcexjx.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhvaWlnZXhvdGVvcnBoZmNleGp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyMDQ0NzYsImV4cCI6MjA4MTc4MDQ3Nn0.lGQlVM6Q8stDOybxGBSVHcpL_9CtuRl6QRbkn5ekfgI';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // 本地缓存
+        let dataCache = {};
 
         // 获取今天日期
         function getTodayDate() {
@@ -463,18 +469,12 @@
         // 解析 Anki 统计文本
         function parseAnkiText(text) {
             try {
-                // 清理文本中的特殊字符
                 const cleanText = text.replace(/[\u2068\u2069]/g, '');
                 
-                // 解析时长和卡片数
                 const durationMatch = cleanText.match(/在\s*([\d.]+)\s*分/);
                 const cardsMatch = cleanText.match(/学习了\s*([\d]+)\s*张/);
                 const avgMatch = cleanText.match(/平均每张卡片\s*([\d.]+)\s*秒/);
-                
-                // 解析重来计数
                 const retryMatch = cleanText.match(/「重来」计数[：:]\s*([\d]+)\s*\(([\d.]+)%\)/);
-                
-                // 解析学习类型
                 const learnMatch = cleanText.match(/学习[：:]\s*([\d]+)/);
                 const reviewMatch = cleanText.match(/复习[：:]\s*([\d]+)/);
                 const relearnMatch = cleanText.match(/重新学习[：:]\s*([\d]+)/);
@@ -501,15 +501,90 @@
             }
         }
 
-        // 加载数据
-        function loadData() {
-            const data = localStorage.getItem(STORAGE_KEY);
-            return data ? JSON.parse(data) : {};
+        // 从 Supabase 加载数据
+        async function loadData() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('anki_records')
+                    .select('*')
+                    .order('date', { ascending: true });
+
+                if (error) throw error;
+
+                dataCache = {};
+                data.forEach(record => {
+                    dataCache[record.date] = {
+                        duration: record.duration,
+                        cards: record.cards,
+                        avgSeconds: record.avg_seconds,
+                        retryCount: record.retry_count,
+                        retryPercent: record.retry_percent,
+                        learn: record.learn,
+                        review: record.review,
+                        relearn: record.relearn,
+                        filtered: record.filtered
+                    };
+                });
+                return dataCache;
+            } catch (e) {
+                console.error('加载数据失败:', e);
+                showToast('加载数据失败');
+                return {};
+            }
         }
 
-        // 保存数据
-        function saveData(data) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        // 保存数据到 Supabase
+        async function saveRecord(date, parsed) {
+            try {
+                const record = {
+                    date: date,
+                    duration: parsed.duration,
+                    cards: parsed.cards,
+                    avg_seconds: parsed.avgSeconds,
+                    retry_count: parsed.retryCount,
+                    retry_percent: parsed.retryPercent,
+                    learn: parsed.learn,
+                    review: parsed.review,
+                    relearn: parsed.relearn,
+                    filtered: parsed.filtered
+                };
+
+                const { error } = await supabaseClient
+                    .from('anki_records')
+                    .upsert(record, { onConflict: 'date' });
+
+                if (error) throw error;
+
+                dataCache[date] = parsed;
+                return true;
+            } catch (e) {
+                console.error('保存失败:', e);
+                showToast('保存失败: ' + e.message);
+                return false;
+            }
+        }
+
+        // 删除记录
+        async function deleteRecord(date) {
+            if (!confirm(`确定删除 ${formatDate(date)} 的记录吗？`)) return;
+            
+            try {
+                const { error } = await supabaseClient
+                    .from('anki_records')
+                    .delete()
+                    .eq('date', date);
+
+                if (error) throw error;
+
+                delete dataCache[date];
+                updateStats();
+                updateHistory();
+                updateChart();
+                showToast('已删除');
+            } catch (e) {
+                console.error('删除失败:', e);
+                showToast('删除失败: ' + e.message);
+            }
         }
 
         // 显示 Toast
@@ -573,8 +648,7 @@
 
         // 更新统计概览
         function updateStats() {
-            const data = loadData();
-            const entries = Object.values(data);
+            const entries = Object.values(dataCache);
             
             const totalDays = entries.length;
             const totalCards = entries.reduce((sum, e) => sum + e.cards, 0);
@@ -591,9 +665,8 @@
 
         // 更新历史记录
         function updateHistory() {
-            const data = loadData();
             const list = document.getElementById('historyList');
-            const dates = Object.keys(data).sort().reverse();
+            const dates = Object.keys(dataCache).sort().reverse();
 
             if (dates.length === 0) {
                 list.innerHTML = '<div class="empty-state">暂无数据，粘贴你的第一条 Anki 统计吧</div>';
@@ -601,7 +674,7 @@
             }
 
             list.innerHTML = dates.map(date => {
-                const d = data[date];
+                const d = dataCache[date];
                 return `
                     <div class="history-item">
                         <div class="history-date">${formatDate(date)}</div>
@@ -618,27 +691,12 @@
             }).join('');
         }
 
-        // 删除记录
-        function deleteRecord(date) {
-            if (!confirm(`确定删除 ${formatDate(date)} 的记录吗？`)) return;
-            
-            const data = loadData();
-            delete data[date];
-            saveData(data);
-            
-            updateStats();
-            updateHistory();
-            updateChart();
-            showToast('已删除');
-        }
-
         // 图表相关
         let mainChart = null;
         let currentChartType = 'cards';
 
         function updateChart() {
-            const data = loadData();
-            const dates = Object.keys(data).sort().slice(-30); // 最近30天
+            const dates = Object.keys(dataCache).sort().slice(-30);
             
             if (dates.length === 0) {
                 if (mainChart) {
@@ -668,7 +726,7 @@
                         labels,
                         datasets: [{
                             label: '卡片数量',
-                            data: dates.map(d => data[d].cards),
+                            data: dates.map(d => dataCache[d].cards),
                             borderColor: '#4a9eff',
                             backgroundColor: 'rgba(74, 158, 255, 0.1)',
                             fill: true,
@@ -683,7 +741,7 @@
                         labels,
                         datasets: [{
                             label: '学习时长(分)',
-                            data: dates.map(d => data[d].duration),
+                            data: dates.map(d => dataCache[d].duration),
                             borderColor: '#51cf66',
                             backgroundColor: 'rgba(81, 207, 102, 0.1)',
                             fill: true,
@@ -698,7 +756,7 @@
                         labels,
                         datasets: [{
                             label: '平均耗时(秒/张)',
-                            data: dates.map(d => data[d].avgSeconds),
+                            data: dates.map(d => dataCache[d].avgSeconds),
                             borderColor: '#9775fa',
                             backgroundColor: 'rgba(151, 117, 250, 0.1)',
                             fill: true,
@@ -713,7 +771,7 @@
                         labels,
                         datasets: [{
                             label: '重来比例(%)',
-                            data: dates.map(d => data[d].retryPercent),
+                            data: dates.map(d => dataCache[d].retryPercent),
                             borderColor: '#ff6b6b',
                             backgroundColor: 'rgba(255, 107, 107, 0.1)',
                             fill: true,
@@ -729,22 +787,22 @@
                         datasets: [
                             {
                                 label: '学习',
-                                data: dates.map(d => data[d].learn),
+                                data: dates.map(d => dataCache[d].learn),
                                 backgroundColor: '#4a9eff'
                             },
                             {
                                 label: '复习',
-                                data: dates.map(d => data[d].review),
+                                data: dates.map(d => dataCache[d].review),
                                 backgroundColor: '#51cf66'
                             },
                             {
                                 label: '重新学习',
-                                data: dates.map(d => data[d].relearn),
+                                data: dates.map(d => dataCache[d].relearn),
                                 backgroundColor: '#fcc419'
                             },
                             {
                                 label: '已筛选',
-                                data: dates.map(d => data[d].filtered),
+                                data: dates.map(d => dataCache[d].filtered),
                                 backgroundColor: '#868e96'
                             }
                         ]
@@ -772,8 +830,49 @@
             mainChart = new Chart(ctx, chartConfig);
         }
 
+        // 导出数据
+        function exportData() {
+            const blob = new Blob([JSON.stringify(dataCache, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `anki-tracker-${getTodayDate()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('已导出');
+        }
+
+        // 导入数据
+        async function importData(file) {
+            try {
+                const text = await file.text();
+                const importedData = JSON.parse(text);
+                
+                let count = 0;
+                for (const [date, record] of Object.entries(importedData)) {
+                    await saveRecord(date, record);
+                    count++;
+                }
+                
+                await loadData();
+                updateStats();
+                updateHistory();
+                updateChart();
+                showToast(`已导入 ${count} 条记录`);
+            } catch (e) {
+                console.error('导入失败:', e);
+                showToast('导入失败：无效的 JSON 文件');
+            }
+        }
+
         // 初始化
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 显示加载状态
+            showToast('正在加载数据...');
+            
+            // 从 Supabase 加载数据
+            await loadData();
+            
             // 初始化日期选择器
             const dateSelect = document.getElementById('dateSelect');
             const saveBtn = document.getElementById('saveBtn');
@@ -802,26 +901,32 @@
             });
 
             // 保存按钮
-            document.getElementById('saveBtn').addEventListener('click', () => {
+            document.getElementById('saveBtn').addEventListener('click', async () => {
                 const parsed = parseAnkiText(textarea.value);
                 if (!parsed) return;
 
-                const data = loadData();
                 const selectedDate = dateSelect.value;
                 
-                if (data[selectedDate]) {
+                if (dataCache[selectedDate]) {
                     if (!confirm(`${formatDate(selectedDate)} 已有记录，是否覆盖？`)) return;
                 }
 
-                data[selectedDate] = parsed;
-                saveData(data);
-
-                textarea.value = '';
-                updatePreview(null);
-                updateStats();
-                updateHistory();
-                updateChart();
-                showToast(`✓ 已保存到 ${formatDate(selectedDate)}`);
+                saveBtn.disabled = true;
+                saveBtn.textContent = '保存中...';
+                
+                const success = await saveRecord(selectedDate, parsed);
+                
+                if (success) {
+                    textarea.value = '';
+                    updatePreview(null);
+                    updateStats();
+                    updateHistory();
+                    updateChart();
+                    showToast(`✓ 已保存到 ${formatDate(selectedDate)}`);
+                }
+                
+                updateSaveBtnText();
+                saveBtn.disabled = false;
             });
 
             // 清空按钮
@@ -841,17 +946,7 @@
             });
 
             // 导出
-            document.getElementById('exportBtn').addEventListener('click', () => {
-                const data = loadData();
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `anki-tracker-${getTodayDate()}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-                showToast('已导出');
-            });
+            document.getElementById('exportBtn').addEventListener('click', exportData);
 
             // 导入
             document.getElementById('importBtn').addEventListener('click', () => {
@@ -860,24 +955,9 @@
 
             document.getElementById('importFile').addEventListener('change', (e) => {
                 const file = e.target.files[0];
-                if (!file) return;
-
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const importedData = JSON.parse(event.target.result);
-                        const currentData = loadData();
-                        const merged = { ...currentData, ...importedData };
-                        saveData(merged);
-                        updateStats();
-                        updateHistory();
-                        updateChart();
-                        showToast(`已导入 ${Object.keys(importedData).length} 条记录`);
-                    } catch (err) {
-                        showToast('导入失败：无效的 JSON 文件');
-                    }
-                };
-                reader.readAsText(file);
+                if (file) {
+                    importData(file);
+                }
                 e.target.value = '';
             });
 
@@ -885,6 +965,7 @@
             updateStats();
             updateHistory();
             updateChart();
+            showToast('数据加载完成');
         });
     </script>
 </body>
