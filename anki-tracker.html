@@ -131,6 +131,23 @@
             color: #868e96;
         }
 
+        .date-picker {
+            margin-left: auto;
+            padding: 10px 14px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            color: #333;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        .date-picker:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+
         .preview {
             display: none;
             margin-top: 16px;
@@ -364,9 +381,9 @@
             <h2>粘贴今日数据</h2>
             <textarea id="inputText" placeholder="粘贴 Anki 统计文本，例如：&#10;今天在 83.38 分内学习了 328 张卡片（平均每张卡片 15.25 秒）&#10;「重来」计数： 121 (36.89%)&#10;学习：182；复习：84；重新学习：62；已筛选：0"></textarea>
             <div class="actions">
-                <button class="btn btn-primary" id="saveBtn" disabled>保存到今天</button>
+                <button class="btn btn-primary" id="saveBtn" disabled>保存到 --</button>
                 <button class="btn btn-secondary" id="clearBtn">清空</button>
-                <span class="date-display" id="todayDate"></span>
+                <input type="date" id="dateSelect" class="date-picker">
             </div>
             <div class="preview" id="preview">
                 <div class="preview-title">📋 解析预览</div>
@@ -400,6 +417,7 @@
             <div class="chart-tabs">
                 <button class="chart-tab active" data-chart="cards">卡片数量</button>
                 <button class="chart-tab" data-chart="duration">学习时长</button>
+                <button class="chart-tab" data-chart="avgTime">平均耗时</button>
                 <button class="chart-tab" data-chart="retry">重来比例</button>
                 <button class="chart-tab" data-chart="breakdown">类型分布</button>
             </div>
@@ -673,6 +691,21 @@
                         }]
                     }
                 };
+            } else if (currentChartType === 'avgTime') {
+                chartConfig = {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: '平均耗时(秒/张)',
+                            data: dates.map(d => data[d].avgSeconds),
+                            borderColor: '#9775fa',
+                            backgroundColor: 'rgba(151, 117, 250, 0.1)',
+                            fill: true,
+                            tension: 0.3
+                        }]
+                    }
+                };
             } else if (currentChartType === 'retry') {
                 chartConfig = {
                     type: 'line',
@@ -708,6 +741,11 @@
                                 label: '重新学习',
                                 data: dates.map(d => data[d].relearn),
                                 backgroundColor: '#fcc419'
+                            },
+                            {
+                                label: '已筛选',
+                                data: dates.map(d => data[d].filtered),
+                                backgroundColor: '#868e96'
                             }
                         ]
                     },
@@ -736,14 +774,31 @@
 
         // 初始化
         document.addEventListener('DOMContentLoaded', () => {
-            // 显示今天日期
-            document.getElementById('todayDate').textContent = formatDate(getTodayDate());
+            // 初始化日期选择器
+            const dateSelect = document.getElementById('dateSelect');
+            const saveBtn = document.getElementById('saveBtn');
+            dateSelect.value = getTodayDate();
+            
+            // 更新按钮文案
+            function updateSaveBtnText() {
+                const selectedDate = dateSelect.value;
+                if (selectedDate) {
+                    saveBtn.textContent = `保存到 ${formatDate(selectedDate)}`;
+                }
+            }
+            updateSaveBtnText();
+
+            // 日期选择变化时更新按钮
+            dateSelect.addEventListener('change', updateSaveBtnText);
 
             // 监听输入
             const textarea = document.getElementById('inputText');
             textarea.addEventListener('input', () => {
                 const parsed = parseAnkiText(textarea.value);
                 updatePreview(parsed);
+                if (parsed) {
+                    updateSaveBtnText();
+                }
             });
 
             // 保存按钮
@@ -752,13 +807,13 @@
                 if (!parsed) return;
 
                 const data = loadData();
-                const today = getTodayDate();
+                const selectedDate = dateSelect.value;
                 
-                if (data[today]) {
-                    if (!confirm('今天已有记录，是否覆盖？')) return;
+                if (data[selectedDate]) {
+                    if (!confirm(`${formatDate(selectedDate)} 已有记录，是否覆盖？`)) return;
                 }
 
-                data[today] = parsed;
+                data[selectedDate] = parsed;
                 saveData(data);
 
                 textarea.value = '';
@@ -766,7 +821,7 @@
                 updateStats();
                 updateHistory();
                 updateChart();
-                showToast('✓ 已保存');
+                showToast(`✓ 已保存到 ${formatDate(selectedDate)}`);
             });
 
             // 清空按钮
