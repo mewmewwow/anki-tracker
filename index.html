@@ -686,6 +686,7 @@
         let dataCache = {};
         let currentUser = null;
         let isSignUpMode = false;
+        let isDomReady = false;
 
         // ==================== 认证相关函数 ====================
 
@@ -779,24 +780,34 @@
             }
         }
 
+        // 初始化应用（登录后调用）
+        async function initApp() {
+            if (!isDomReady || !currentUser) return;
+
+            showApp();
+            await loadData();
+            updateStats();
+            updateHistory();
+            updateChart();
+            showToast('数据加载完成');
+        }
+
         // 监听认证状态变化
         supabaseClient.auth.onAuthStateChange(async (event, session) => {
             console.log('Auth event:', event, session?.user?.email);
 
             if (session) {
                 currentUser = session.user;
-                showApp();
-                // 只在新登录或页面刷新时加载数据
-                if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
-                    await loadData();
-                    updateStats();
-                    updateHistory();
-                    updateChart();
+                // DOM 准备好后才初始化应用
+                if (isDomReady) {
+                    await initApp();
                 }
             } else if (event === 'SIGNED_OUT') {
                 currentUser = null;
                 dataCache = {};
-                showAuthForm();
+                if (isDomReady) {
+                    showAuthForm();
+                }
             }
         });
 
@@ -1277,14 +1288,24 @@
             document.getElementById('githubLogin').addEventListener('click', () => signInWithOAuth('github'));
 
             // 登出按钮
-            document.getElementById('logoutBtn').addEventListener('click', signOut);
+            document.getElementById('logoutBtn').addEventListener('click', async () => {
+                console.log('Logout clicked');
+                await signOut();
+            });
+
+            // ==================== 标记 DOM 已准备好 ====================
+            isDomReady = true;
 
             // ==================== 检查认证状态 ====================
-            const isLoggedIn = await checkAuth();
-
-            if (isLoggedIn) {
-                showToast('正在加载数据...');
-                await loadData();
+            // 如果 onAuthStateChange 已经设置了 currentUser，直接初始化
+            if (currentUser) {
+                await initApp();
+            } else {
+                // 否则检查 session
+                const isLoggedIn = await checkAuth();
+                if (isLoggedIn) {
+                    await initApp();
+                }
             }
 
             // ==================== 主应用事件绑定 ====================
@@ -1377,13 +1398,6 @@
                 e.target.value = '';
             });
 
-            // 初始加载（只有登录后才更新 UI）
-            if (isLoggedIn) {
-                updateStats();
-                updateHistory();
-                updateChart();
-                showToast('数据加载完成');
-            }
         });
     </script>
 </body>
