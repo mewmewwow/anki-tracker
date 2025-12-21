@@ -4,44 +4,54 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Anki Tracker is a single-page web application for tracking daily Anki study statistics. Users paste Anki statistics text, which is parsed and stored in Supabase, then visualized with charts.
+Anki Tracker is a web application for tracking daily Anki study statistics. Users paste Anki statistics text, which is parsed and stored in Supabase, then visualized with charts.
 
 ## Development
 
-**No build process required.** Open `anki-tracker.html` directly in a browser.
+**No build process required.** Open `index.html` directly in a browser, or deploy to Vercel.
 
-## Architecture
+## Project Structure
 
-Single HTML file (`anki-tracker.html`) with embedded CSS and vanilla JavaScript.
+```
+anki-tracker/
+├── index.html          # Main HTML structure
+├── css/
+│   └── styles.css      # All styles (~400 lines)
+├── js/
+│   ├── config.js       # Supabase config & global state
+│   ├── auth.js         # Authentication (signIn, signUp, OAuth, signOut)
+│   ├── data.js         # CRUD operations (loadData, saveRecord, deleteRecord)
+│   ├── ui.js           # UI updates (showToast, updateStats, updateHistory)
+│   ├── charts.js       # Chart.js rendering
+│   └── app.js          # Entry point, event bindings, DOMContentLoaded
+└── CLAUDE.md
+```
 
-**External Dependencies (CDN):**
+## External Dependencies (CDN)
 
 - Chart.js - data visualization
-- Supabase JS client - data persistence
-
-**Data Flow:**
-
-1. User pastes Anki stats → `parseAnkiText()` extracts metrics via regex
-2. Data stored in Supabase `anki_records` table (upsert by date)
-3. Local `dataCache` object mirrors remote data
-4. UI updates: `updateStats()`, `updateHistory()`, `updateChart()`
-
-## Supabase Schema
-
-Table `anki_records` with fields: date (unique), duration, cards, avg_seconds, retry_count, retry_percent, learn, review, relearn, filtered. See README.md for full schema.
+- Supabase JS client - auth & data persistence
 
 ## Key Functions
 
-- `parseAnkiText(text)` - Regex parsing of Anki stats (Chinese format)
-- `loadData()`, `saveRecord()`, `deleteRecord()` - Supabase CRUD
-- `updateChart()` - Chart.js rendering based on `currentChartType`
-- `exportData()`, `importData()` - JSON import/export
+| File | Functions |
+|------|-----------|
+| `auth.js` | `signIn`, `signUp`, `signOut`, `signInWithOAuth`, `checkAuth`, `initApp` |
+| `data.js` | `loadData`, `saveRecord`, `deleteRecord`, `parseAnkiText`, `exportData`, `importData` |
+| `ui.js` | `showApp`, `showAuthForm`, `showToast`, `updatePreview`, `updateStats`, `updateHistory` |
+| `charts.js` | `updateChart` |
 
+## Supabase Schema
 
-new requirements:
+Table `anki_records`:
+- `id` (uuid, PK)
+- `user_id` (uuid, FK to auth.users)
+- `date` (date, unique per user)
+- `duration`, `cards`, `avg_seconds`, `retry_count`, `retry_percent`
+- `learn`, `review`, `relearn`, `filtered`
 
-现在所有的代码都在一个文件中不方便管理，如果要做拆分请给出你的方案和文件目录
+RLS Policy: Users can only access their own data (`auth.uid() = user_id`).
 
-接下来我希望把代码部署到云端服务器，让所有人都可以注册账号、访问服务、管理自己的数据
+## Deployment
 
-请你给出技术实现方案，以及Tell me what you need from me to do this well
+Hosted on Vercel. Push to `main` triggers auto-deploy.
