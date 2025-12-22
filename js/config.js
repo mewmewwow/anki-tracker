@@ -8,5 +8,6 @@ let dataCache = {};
 let currentUser = null;
 let isSignUpMode = false;
 let isDomReady = false;
+let isAppInitialized = false;  // 防止重复初始化
 let mainChart = null;
 let currentChartType = 'cards';

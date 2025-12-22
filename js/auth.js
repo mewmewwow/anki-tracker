@@ -50,6 +50,7 @@ async function signOut() {
     await supabaseClient.auth.signOut();
     dataCache = {};
     currentUser = null;
+    isAppInitialized = false;  // 重置，允许下次登录时重新初始化
 }
 
 // 检查认证状态
@@ -67,21 +68,33 @@ async function checkAuth() {
 
 // 初始化应用（登录后调用）
 async function initApp() {
+    // 防止重复初始化
+    if (isAppInitialized) {
+        console.log('initApp skipped: already initialized');
+        return;
+    }
+
     if (!isDomReady || !currentUser) {
         console.log('initApp skipped:', { isDomReady, hasUser: !!currentUser });
         return;
     }
 
+    isAppInitialized = true;
     console.log('initApp starting for user:', currentUser.email);
     showApp();
 
-    const data = await loadData();
-    console.log('loadData returned:', Object.keys(data).length, 'records');
+    try {
+        const data = await loadData();
+        console.log('loadData returned:', Object.keys(data).length, 'records');
 
-    updateStats();
-    updateHistory();
-    updateChart();
-    showToast('数据加载完成');
+        updateStats();
+        updateHistory();
+        updateChart();
+        showToast('数据加载完成');
+    } catch (e) {
+        console.error('initApp error:', e);
+        isAppInitialized = false;  // 允许重试
+    }
 }
 
 // 监听认证状态变化
