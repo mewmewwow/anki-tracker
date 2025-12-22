@@ -69,6 +69,21 @@ function updateChart() {
                 }]
             }
         };
+    } else if (currentChartType === 'retryCount') {
+        chartConfig = {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: '重来计数',
+                    data: dates.map(d => dataCache[d].retryCount),
+                    borderColor: '#f783ac',
+                    backgroundColor: 'rgba(247, 131, 172, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                }]
+            }
+        };
     } else if (currentChartType === 'retry') {
         chartConfig = {
             type: 'line',
