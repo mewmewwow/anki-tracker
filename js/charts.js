@@ -40,6 +40,74 @@ function getDataForDate(date) {
     };
 }
 
+// 获取周数（周日为一周的第一天）
+function getWeekNumber(date) {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    // 将日期调整到本周的周日
+    const dayOfWeek = d.getDay(); // 周日=0, 周一=1, ...
+    d.setDate(d.getDate() - dayOfWeek); // 回到本周的周日
+    // 找到该年的1月1日
+    const yearStart = new Date(d.getFullYear(), 0, 1);
+    // 计算该年1月1日是周几，并调整到那一周的周日
+    const yearStartDay = yearStart.getDay();
+    yearStart.setDate(yearStart.getDate() - yearStartDay);
+    // 计算周数
+    const weekNum = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+    return weekNum;
+}
+
+// 星期几的中文映射（单字），周日作为第一天
+const weekDayNames = ['日', '一', '二', '三', '四', '五', '六'];
+
+// Chart.js 插件：在图表顶部绘制周几和周数
+const weekInfoPlugin = {
+    id: 'weekInfoPlugin',
+    afterDraw: function(chart) {
+        const ctx = chart.ctx;
+        const xScale = chart.scales.x;
+        const chartArea = chart.chartArea;
+        
+        if (!xScale || !chart.data.weekData) return;
+        
+        const weekData = chart.data.weekData;
+        const weekGroups = chart.data.weekGroups;
+        
+        ctx.save();
+        
+        // 绘制每个数据点对应的星期几
+        const fontSize = 10;
+        ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillStyle = '#868e96';
+        
+        weekData.forEach((day, index) => {
+            const x = xScale.getPixelForValue(index);
+            const y = chartArea.top - 8;
+            ctx.fillText(day.dayName, x, y);
+        });
+        
+        // 绘制周数标签（只在每周的中间位置显示一次）
+        ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+        ctx.textBaseline = 'bottom';
+        ctx.fillStyle = '#495057';
+        
+        weekGroups.forEach(group => {
+            // 计算该周所有日期的中间位置
+            const startX = xScale.getPixelForValue(group.startIndex);
+            const endX = xScale.getPixelForValue(group.endIndex);
+            const centerX = (startX + endX) / 2;
+            const y = chartArea.top - 20;
+            ctx.fillText(`W${group.weekNum}`, centerX, y);
+        });
+        
+        ctx.restore();
+    }
+};
+
+// 注册插件
+Chart.register(weekInfoPlugin);
+
 function updateChart() {
     const existingDates = Object.keys(dataCache).sort();
 
@@ -54,26 +122,47 @@ function updateChart() {
     // 填充缺失的日期，取最近30天
     const allDates = fillMissingDates(existingDates).slice(-30);
 
-    // 获取ISO周数（自然周，周一为一周开始）
-    function getWeekNumber(date) {
-        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-        const dayNum = d.getUTCDay() || 7; // 将周日从0改为7
-        d.setUTCDate(d.getUTCDate() + 4 - dayNum); // 调整到周四
-        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-        return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-    }
-    
-    // 星期几的中文映射（单字）
-    const weekDayNames = ['日', '一', '二', '三', '四', '五', '六'];
-    
-    // X轴标签恢复简洁格式
+    // X轴标签：简洁的月/日格式
     const labels = allDates.map(d => {
         const date = new Date(d);
         return `${date.getMonth() + 1}/${date.getDate()}`;
     });
     
-    // 生成周卡片
-    generateWeekCards(allDates, weekDayNames, getWeekNumber);
+    // 准备周数据（每个日期对应的星期几）
+    const weekData = allDates.map(d => {
+        const date = new Date(d);
+        return {
+            date: date,
+            dayName: weekDayNames[date.getDay()],
+            weekNum: getWeekNumber(date)
+        };
+    });
+    
+    // 按周分组（用于显示周数标签）
+    const weekGroups = [];
+    let currentWeekNum = null;
+    let currentGroup = null;
+    
+    weekData.forEach((day, index) => {
+        if (currentWeekNum !== day.weekNum) {
+            if (currentGroup) {
+                currentGroup.endIndex = index - 1;
+                weekGroups.push(currentGroup);
+            }
+            currentWeekNum = day.weekNum;
+            currentGroup = {
+                weekNum: day.weekNum,
+                startIndex: index,
+                endIndex: index
+            };
+        } else {
+            currentGroup.endIndex = index;
+        }
+    });
+    
+    if (currentGroup) {
+        weekGroups.push(currentGroup);
+    }
 
     const ctx = document.getElementById('mainChart').getContext('2d');
 
@@ -88,6 +177,8 @@ function updateChart() {
             type: 'line',
             data: {
                 labels,
+                weekData,
+                weekGroups,
                 datasets: [{
                     label: '卡片数量',
                     data: allDates.map(d => getDataForDate(d).cards),
@@ -103,6 +194,8 @@ function updateChart() {
             type: 'line',
             data: {
                 labels,
+                weekData,
+                weekGroups,
                 datasets: [{
                     label: '学习时长(分)',
                     data: allDates.map(d => getDataForDate(d).duration),
@@ -118,6 +211,8 @@ function updateChart() {
             type: 'line',
             data: {
                 labels,
+                weekData,
+                weekGroups,
                 datasets: [{
                     label: '平均耗时(秒/张)',
                     data: allDates.map(d => getDataForDate(d).avgSeconds),
@@ -133,6 +228,8 @@ function updateChart() {
             type: 'line',
             data: {
                 labels,
+                weekData,
+                weekGroups,
                 datasets: [{
                     label: '重来计数',
                     data: allDates.map(d => getDataForDate(d).retryCount),
@@ -148,6 +245,8 @@ function updateChart() {
             type: 'line',
             data: {
                 labels,
+                weekData,
+                weekGroups,
                 datasets: [{
                     label: '重来比例(%)',
                     data: allDates.map(d => getDataForDate(d).retryPercent),
@@ -163,6 +262,8 @@ function updateChart() {
             type: 'bar',
             data: {
                 labels,
+                weekData,
+                weekGroups,
                 datasets: [
                     {
                         label: '学习',
@@ -195,10 +296,16 @@ function updateChart() {
         };
     }
 
+    // 配置图表顶部留出空间显示周几和周数
     chartConfig.options = {
         ...chartConfig.options,
         responsive: true,
         maintainAspectRatio: false,
+        layout: {
+            padding: {
+                top: 32 // 为周几和周数留出空间
+            }
+        },
         plugins: {
             legend: {
                 display: currentChartType === 'breakdown'
@@ -207,71 +314,4 @@ function updateChart() {
     };
 
     mainChart = new Chart(ctx, chartConfig);
-}
-
-// 生成周卡片
-function generateWeekCards(allDates, weekDayNames, getWeekNumber) {
-    const container = document.getElementById('weekCardsContainer');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    if (allDates.length === 0) return;
-    
-    // 按周分组日期
-    const weekGroups = [];
-    let currentWeek = null;
-    let currentGroup = null;
-    
-    allDates.forEach(dateStr => {
-        const date = new Date(dateStr);
-        const weekNum = getWeekNumber(date);
-        const year = date.getFullYear();
-        const weekKey = `${year}-W${weekNum}`;
-        
-        if (currentWeek !== weekKey) {
-            if (currentGroup) {
-                weekGroups.push(currentGroup);
-            }
-            currentWeek = weekKey;
-            currentGroup = {
-                weekNum: weekNum,
-                year: year,
-                days: []
-            };
-        }
-        
-        currentGroup.days.push({
-            date: date,
-            dayName: weekDayNames[date.getDay()]
-        });
-    });
-    
-    if (currentGroup) {
-        weekGroups.push(currentGroup);
-    }
-    
-    // 为每个周生成卡片
-    weekGroups.forEach((group, index) => {
-        const card = document.createElement('div');
-        card.className = `week-card color-${index % 6}`;
-        
-        const title = document.createElement('div');
-        title.className = 'week-card-title';
-        title.textContent = `W${group.weekNum}`;
-        
-        const daysContainer = document.createElement('div');
-        daysContainer.className = 'week-card-days';
-        
-        group.days.forEach(day => {
-            const dayEl = document.createElement('div');
-            dayEl.className = 'week-day';
-            dayEl.textContent = day.dayName;
-            daysContainer.appendChild(dayEl);
-        });
-        
-        card.appendChild(title);
-        card.appendChild(daysContainer);
-        container.appendChild(card);
-    });
 }
