@@ -72,10 +72,11 @@ async function loadData() {
 
         console.log('loadData: received', data?.length || 0, 'records');
 
-        dataCache = {};
+        // 先处理到临时变量，成功后再赋值给 dataCache
+        const tempCache = {};
         if (data) {
             data.forEach(record => {
-                dataCache[record.date] = {
+                tempCache[record.date] = {
                     duration: record.duration,
                     cards: record.cards,
                     avgSeconds: record.avg_seconds,
@@ -88,11 +89,14 @@ async function loadData() {
                 };
             });
         }
+        
+        // 全部处理成功后才更新 dataCache
+        dataCache = tempCache;
         return dataCache;
     } catch (e) {
         console.error('加载数据失败:', e.message || e);
         showToast('加载数据失败: ' + (e.message || '未知错误'));
-        return {};
+        throw e;  // 重新抛出错误，让调用方处理
     }
 }
 
