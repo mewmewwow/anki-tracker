@@ -130,3 +130,38 @@ function updateHistory() {
         `;
     }).join('');
 }
+
+// 显示加载错误状态
+function showLoadError(errorMessage) {
+    const errorEl = document.getElementById('loadError');
+    const errorMsgEl = document.getElementById('loadErrorMessage');
+    if (errorEl && errorMsgEl) {
+        errorMsgEl.textContent = errorMessage || '数据加载失败';
+        errorEl.classList.remove('hidden');
+    }
+}
+
+// 隐藏加载错误状态
+function hideLoadError() {
+    const errorEl = document.getElementById('loadError');
+    if (errorEl) {
+        errorEl.classList.add('hidden');
+    }
+}
+
+// 重试加载数据
+async function retryLoadData() {
+    hideLoadError();
+    showToast('正在重新加载...');
+    
+    try {
+        await loadData();
+        updateStats();
+        updateHistory();
+        updateChart();
+        showToast('✓ 数据加载完成');
+    } catch (e) {
+        console.error('重试加载失败:', e);
+        showLoadError(e.message || '数据加载失败');
+    }
+}

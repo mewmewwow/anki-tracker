@@ -85,6 +85,7 @@ async function initApp() {
     showApp();
 
     try {
+        hideLoadError();  // 隐藏之前的错误状态
         const data = await loadData();
         console.log('loadData returned:', Object.keys(data).length, 'records');
 
@@ -94,6 +95,7 @@ async function initApp() {
         showToast('数据加载完成');
     } catch (e) {
         console.error('initApp error:', e);
+        showLoadError(e.message || '数据加载失败，请检查网络连接');
         isAppInitialized = false;  // 允许重试
     }
 }
