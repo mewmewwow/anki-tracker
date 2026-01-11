@@ -63,11 +63,20 @@ async function loadData() {
     console.log('loadData: fetching for user', currentUser.id);
 
     try {
-        const { data, error } = await supabaseClient
+        // 创建超时 Promise（10秒）
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('请求超时，请重试')), 10000);
+        });
+
+        // 数据请求 Promise
+        const fetchPromise = supabaseClient
             .from('anki_records')
             .select('*')
             .eq('user_id', currentUser.id)
             .order('date', { ascending: true });
+
+        // 竞争：谁先完成用谁的结果
+        const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
 
         if (error) {
             console.error('Supabase error:', JSON.stringify(error));
