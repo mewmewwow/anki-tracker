@@ -54,9 +54,6 @@ function updateChart() {
     // 填充缺失的日期，取最近30天
     const allDates = fillMissingDates(existingDates).slice(-30);
 
-    // 星期几的中文映射
-    const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
-    
     // 获取ISO周数（自然周，周一为一周开始）
     function getWeekNumber(date) {
         const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
@@ -66,12 +63,17 @@ function updateChart() {
         return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
     }
     
+    // 星期几的中文映射（单字）
+    const weekDayNames = ['日', '一', '二', '三', '四', '五', '六'];
+    
+    // X轴标签恢复简洁格式
     const labels = allDates.map(d => {
         const date = new Date(d);
-        const weekDay = weekDays[date.getDay()];
-        const weekNum = getWeekNumber(date);
-        return `${date.getMonth() + 1}/${date.getDate()} 周${weekDay} W${weekNum}`;
+        return `${date.getMonth() + 1}/${date.getDate()}`;
     });
+    
+    // 生成周卡片
+    generateWeekCards(allDates, weekDayNames, getWeekNumber);
 
     const ctx = document.getElementById('mainChart').getContext('2d');
 
@@ -205,4 +207,71 @@ function updateChart() {
     };
 
     mainChart = new Chart(ctx, chartConfig);
+}
+
+// 生成周卡片
+function generateWeekCards(allDates, weekDayNames, getWeekNumber) {
+    const container = document.getElementById('weekCardsContainer');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    if (allDates.length === 0) return;
+    
+    // 按周分组日期
+    const weekGroups = [];
+    let currentWeek = null;
+    let currentGroup = null;
+    
+    allDates.forEach(dateStr => {
+        const date = new Date(dateStr);
+        const weekNum = getWeekNumber(date);
+        const year = date.getFullYear();
+        const weekKey = `${year}-W${weekNum}`;
+        
+        if (currentWeek !== weekKey) {
+            if (currentGroup) {
+                weekGroups.push(currentGroup);
+            }
+            currentWeek = weekKey;
+            currentGroup = {
+                weekNum: weekNum,
+                year: year,
+                days: []
+            };
+        }
+        
+        currentGroup.days.push({
+            date: date,
+            dayName: weekDayNames[date.getDay()]
+        });
+    });
+    
+    if (currentGroup) {
+        weekGroups.push(currentGroup);
+    }
+    
+    // 为每个周生成卡片
+    weekGroups.forEach((group, index) => {
+        const card = document.createElement('div');
+        card.className = `week-card color-${index % 6}`;
+        
+        const title = document.createElement('div');
+        title.className = 'week-card-title';
+        title.textContent = `W${group.weekNum}`;
+        
+        const daysContainer = document.createElement('div');
+        daysContainer.className = 'week-card-days';
+        
+        group.days.forEach(day => {
+            const dayEl = document.createElement('div');
+            dayEl.className = 'week-day';
+            dayEl.textContent = day.dayName;
+            daysContainer.appendChild(dayEl);
+        });
+        
+        card.appendChild(title);
+        card.appendChild(daysContainer);
+        container.appendChild(card);
+    });
 }
