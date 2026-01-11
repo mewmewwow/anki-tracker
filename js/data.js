@@ -174,25 +174,57 @@ function exportData() {
     showToast('已导出');
 }
 
-// 导入数据
+// 导入数据（批量处理）
 async function importData(file) {
+    if (!currentUser) {
+        showToast('请先登录');
+        return;
+    }
+
     try {
         const text = await file.text();
         const importedData = JSON.parse(text);
 
-        let count = 0;
-        for (const [date, record] of Object.entries(importedData)) {
-            await saveRecord(date, record);
-            count++;
+        // 准备批量数据
+        const records = Object.entries(importedData).map(([date, record]) => ({
+            date: date,
+            user_id: currentUser.id,
+            duration: record.duration,
+            cards: record.cards,
+            avg_seconds: record.avgSeconds,
+            retry_count: record.retryCount,
+            retry_percent: record.retryPercent,
+            learn: record.learn,
+            review: record.review,
+            relearn: record.relearn,
+            filtered: record.filtered
+        }));
+
+        if (records.length === 0) {
+            showToast('没有可导入的数据');
+            return;
         }
 
+        showToast(`正在导入 ${records.length} 条记录...`);
+
+        // 批量 upsert（一次性提交）
+        const { error } = await supabaseClient
+            .from('anki_records')
+            .upsert(records, { onConflict: 'user_id,date' });
+
+        if (error) {
+            console.error('Supabase batch import error:', JSON.stringify(error));
+            throw new Error(error.message || JSON.stringify(error));
+        }
+
+        // 刷新本地缓存
         await loadData();
         updateStats();
         updateHistory();
         updateChart();
-        showToast(`已导入 ${count} 条记录`);
+        showToast(`✓ 已导入 ${records.length} 条记录`);
     } catch (e) {
         console.error('导入失败:', e);
-        showToast('导入失败：无效的 JSON 文件');
+        showToast('导入失败：' + (e.message || '无效的 JSON 文件'));
     }
 }

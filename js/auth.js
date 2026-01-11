@@ -68,7 +68,7 @@ async function checkAuth() {
 
 // 初始化应用（登录后调用）
 async function initApp() {
-    // 防止重复初始化
+    // 防止重复初始化 - 先检查再立即设置，避免竞态条件
     if (isAppInitialized) {
         console.log('initApp skipped: already initialized');
         return;
@@ -79,6 +79,7 @@ async function initApp() {
         return;
     }
 
+    // 立即设置标志，防止并发调用
     isAppInitialized = true;
     console.log('initApp starting for user:', currentUser.email);
     showApp();
