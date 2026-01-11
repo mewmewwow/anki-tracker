@@ -54,9 +54,23 @@ function updateChart() {
     // 填充缺失的日期，取最近30天
     const allDates = fillMissingDates(existingDates).slice(-30);
 
+    // 星期几的中文映射
+    const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+    
+    // 获取ISO周数（自然周，周一为一周开始）
+    function getWeekNumber(date) {
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        const dayNum = d.getUTCDay() || 7; // 将周日从0改为7
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum); // 调整到周四
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    }
+    
     const labels = allDates.map(d => {
         const date = new Date(d);
-        return `${date.getMonth() + 1}/${date.getDate()}`;
+        const weekDay = weekDays[date.getDay()];
+        const weekNum = getWeekNumber(date);
+        return `${date.getMonth() + 1}/${date.getDate()} 周${weekDay} W${weekNum}`;
     });
 
     const ctx = document.getElementById('mainChart').getContext('2d');
