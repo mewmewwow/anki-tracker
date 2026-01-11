@@ -63,7 +63,7 @@ async function loadData() {
     console.log('loadData: fetching for user', currentUser.id);
 
     // 使用AbortController和超时机制
-    const TIMEOUT_MS = 10000; // 10秒超时
+    const TIMEOUT_MS = 5000; // 5秒超时
     let timeoutId;
     
     try {
