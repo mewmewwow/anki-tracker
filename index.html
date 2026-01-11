@@ -113,8 +113,14 @@
         </div>
       </div>
 
-      <!-- 加载错误提示 -->
-      <div class="load-error hidden" id="loadError">
+        <!-- 加载状态指示器 -->
+        <div class="loading-state hidden" id="loadingState">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">正在加载数据...</div>
+        </div>
+
+        <!-- 加载错误提示 -->
+        <div class="load-error hidden" id="loadError">
         <div class="load-error-icon">⚠️</div>
         <div class="load-error-message" id="loadErrorMessage">数据加载失败</div>
         <button class="btn btn-primary" onclick="retryLoadData()">

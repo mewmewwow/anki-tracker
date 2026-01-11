@@ -589,3 +589,34 @@ textarea::placeholder {
     font-size: 14px;
     margin-bottom: 20px;
 }
+
+/* 加载状态指示器 */
+.loading-state {
+    background: #fff;
+    border-radius: 12px;
+    padding: 40px;
+    margin-bottom: 20px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #e9ecef;
+    border-top-color: #4a9eff;
+    border-radius: 50%;
+    margin: 0 auto 16px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.loading-text {
+    color: #868e96;
+    font-size: 14px;
+}

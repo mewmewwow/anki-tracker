@@ -152,16 +152,34 @@ function hideLoadError() {
 // 重试加载数据
 async function retryLoadData() {
     hideLoadError();
-    showToast('正在重新加载...');
+    showLoading();
     
     try {
         await loadData();
         updateStats();
         updateHistory();
         updateChart();
+        hideLoading();
         showToast('✓ 数据加载完成');
     } catch (e) {
         console.error('重试加载失败:', e);
+        hideLoading();
         showLoadError(e.message || '数据加载失败');
+    }
+}
+
+// 显示加载状态
+function showLoading() {
+    const loadingEl = document.getElementById('loadingState');
+    if (loadingEl) {
+        loadingEl.classList.remove('hidden');
+    }
+}
+
+// 隐藏加载状态
+function hideLoading() {
+    const loadingEl = document.getElementById('loadingState');
+    if (loadingEl) {
+        loadingEl.classList.add('hidden');
     }
 }
