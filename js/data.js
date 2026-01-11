@@ -62,21 +62,34 @@ async function loadData() {
 
     console.log('loadData: fetching for user', currentUser.id);
 
+    // 使用AbortController和超时机制
+    const TIMEOUT_MS = 10000; // 10秒超时
+    let timeoutId;
+    
     try {
-        // 创建超时 Promise（10秒）
+        // 创建超时 Promise
         const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('请求超时，请重试')), 10000);
+            timeoutId = setTimeout(() => {
+                console.log('loadData: timeout triggered');
+                reject(new Error('请求超时，请重试'));
+            }, TIMEOUT_MS);
         });
 
         // 数据请求 Promise
-        const fetchPromise = supabaseClient
-            .from('anki_records')
-            .select('*')
-            .eq('user_id', currentUser.id)
-            .order('date', { ascending: true });
+        const fetchPromise = (async () => {
+            const result = await supabaseClient
+                .from('anki_records')
+                .select('*')
+                .eq('user_id', currentUser.id)
+                .order('date', { ascending: true });
+            return result;
+        })();
 
         // 竞争：谁先完成用谁的结果
         const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
+        
+        // 清除超时定时器
+        clearTimeout(timeoutId);
 
         if (error) {
             console.error('Supabase error:', JSON.stringify(error));
@@ -107,6 +120,8 @@ async function loadData() {
         dataCache = tempCache;
         return dataCache;
     } catch (e) {
+        // 确保清除定时器
+        if (timeoutId) clearTimeout(timeoutId);
         console.error('加载数据失败:', e.message || e);
         showToast('加载数据失败: ' + (e.message || '未知错误'));
         throw e;  // 重新抛出错误，让调用方处理
