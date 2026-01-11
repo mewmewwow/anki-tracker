@@ -109,13 +109,15 @@ supabaseClient.auth.onAuthStateChange(async (event, session) => {
 
     if (session) {
         currentUser = session.user;
-        // DOM 准备好后才初始化应用
-        if (isDomReady) {
+        // 只在首次登录或刷新页面时初始化，跳过 TOKEN_REFRESHED 事件
+        // TOKEN_REFRESHED 时 session 可能还在刷新中，此时发请求可能卡住
+        if (isDomReady && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
             await initApp();
         }
     } else if (event === 'SIGNED_OUT') {
         currentUser = null;
         dataCache = {};
+        isAppInitialized = false;  // 重置初始化状态
         if (isDomReady) {
             showAuthForm();
         }
